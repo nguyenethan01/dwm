@@ -10,25 +10,6 @@ import CoreData
 struct PersistenceController {
     static let shared = PersistenceController()
 
-    @MainActor
-    static let preview: PersistenceController = {
-        let result = PersistenceController(inMemory: true)
-        let viewContext = result.container.viewContext
-        for _ in 0..<10 {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-        }
-        do {
-            try viewContext.save()
-        } catch {
-            // Replace this implementation with code to handle the error appropriately.
-            // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-            let nsError = error as NSError
-            fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-        }
-        return result
-    }()
-
     let container: NSPersistentContainer
 
     init(inMemory: Bool = false) {
@@ -38,20 +19,64 @@ struct PersistenceController {
         }
         container.loadPersistentStores(completionHandler: { (storeDescription, error) in
             if let error = error as NSError? {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-
-                /*
-                 Typical reasons for an error here include:
-                 * The parent directory does not exist, cannot be created, or disallows writing.
-                 * The persistent store is not accessible, due to permissions or data protection when the device is locked.
-                 * The device is out of space.
-                 * The store could not be migrated to the current model version.
-                 Check the error message to determine what the actual problem was.
-                 */
                 fatalError("Unresolved error \(error), \(error.userInfo)")
             }
         })
         container.viewContext.automaticallyMergesChangesFromParent = true
+        
+        // Add mock data if needed
+        let count = try? container.viewContext.count(for: Transaction.fetchRequest())
+        if count == 0 {
+            createSampleData(in: container.viewContext)
+        }
     }
+    
+    // Create sample transaction data
+    private func createSampleData(in context: NSManagedObjectContext) {
+        let calendar = Calendar.current
+        let today = Date()
+        
+        // Create transactions for today
+        createTransaction(amount: 12.99, daysAgo: 0, in: context)
+        createTransaction(amount: 25.50, daysAgo: 0, in: context)
+        
+        // Create transactions for this week (but not today)
+        createTransaction(amount: 42.75, daysAgo: 2, in: context)
+        createTransaction(amount: 18.35, daysAgo: 3, in: context)
+        createTransaction(amount: 65.20, daysAgo: 5, in: context)
+        
+        // Create transactions for this month (but not this week)
+        createTransaction(amount: 89.99, daysAgo: 10, in: context)
+        createTransaction(amount: 34.50, daysAgo: 15, in: context)
+        createTransaction(amount: 120.00, daysAgo: 20, in: context)
+        
+        // Create a transaction from previous month (should not be counted)
+        createTransaction(amount: 150.00, daysAgo: 35, in: context)
+        
+        // Save the context
+        try? context.save()
+    }
+    
+    private func createTransaction(amount: Double, daysAgo: Int, in context: NSManagedObjectContext) {
+        let transaction = Transaction(context: context)
+        transaction.amount = amount
+        
+        if daysAgo > 0 {
+            let calendar = Calendar.current
+            transaction.date = calendar.date(byAdding: .day, value: -daysAgo, to: Date())
+        } else {
+            transaction.date = Date()
+        }
+    }
+    
+    // Preview helper
+    static var preview: PersistenceController = {
+        let result = PersistenceController(inMemory: true)
+        let viewContext = result.container.viewContext
+        
+        // Ensure we have sample data for previews
+        result.createSampleData(in: viewContext)
+        
+        return result
+    }()
 }
